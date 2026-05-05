@@ -5,6 +5,7 @@
 |-- .gitignore
 |-- debug
     |-- mask_20260506_044403_b6b1f10e7c884d7fabad5522bfa5d17f.jpg
+|-- Dockerfile
 |-- download_model.py
 |-- LICENSE
 |-- main.py
