@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Detection Logs · Pest Detection AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+    <link rel="stylesheet" href="/web/css/app.css">
+</head>
+
+<body>
+    <header class="topbar">
+        <div style="display:flex;align-items:center;gap:28px"><a class="brand" href="/ui">Pest Detection AI</a>
+            <nav class="nav"><a href="/ui">Dashboard</a><a class="active" href="/ui/logs">Logs</a><a
+                    href="/ui/access">Access</a></nav>
+        </div>
+        <div class="avatar">AI</div>
+    </header>
+    <main class="shell">
+        <div class="section-head">
+            <div>
+                <div class="label">Platform archive</div>
+                <h1 style="font-size:36px;margin:4px 0;color:var(--primary)">Detection Logs</h1>
+                <div class="sub">Cloudinary thumbnails from Firebase Realtime Database logs.</div>
+            </div>
+        </div>
+        <div class="card pad" style="margin-bottom:20px">
+            <div class="toolbar"><input id="search" class="input" style="flex:1"
+                    placeholder="Filter by species, timestamp, or log id..."><input id="pestType" class="input"
+                    placeholder="Pest type"><button id="filterBtn" class="btn primary"><span
+                        class="material-symbols-outlined">filter_list</span> Filter</button></div>
+        </div>
+        <div class="card" style="overflow:hidden">
+            <div style="overflow-x:auto">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Entity</th>
+                            <th>Identification</th>
+                            <th>Confidence</th>
+                            <th>Total</th>
+                            <th>Timestamp</th>
+                            <th style="text-align:right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logTable"></tbody>
+                </table>
+            </div>
+            <div class="pager"><span id="pageInfo" class="sub">Loading...</span>
+                <div class="toolbar"><button id="prevBtn" class="btn">Previous</button><button id="nextBtn"
+                        class="btn">Next</button></div>
+            </div>
+        </div>
+    </main>
+    <script src="/web/js/api.js"></script>
+    <script src="/web/js/logs.js"></script>
+</body>
+
+</html>

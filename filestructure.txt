@@ -1,0 +1,29 @@
+|-- .env
+|-- .gitignore
+|-- debug
+    |-- mask_20260506_044403_b6b1f10e7c884d7fabad5522bfa5d17f.jpg
+|-- download_model.py
+|-- LICENSE
+|-- main.py
+|-- models
+    |-- best.pt
+|-- README.md
+|-- requirements.txt
+|-- results
+    |-- result_20260506_044403_b6b1f10e7c884d7fabad5522bfa5d17f.jpg
+|-- uploads
+    |-- 20260506_044403_b6b1f10e7c884d7fabad5522bfa5d17f.jpeg
+|-- web
+    |-- access.html
+    |-- css
+        |-- app.css
+    |-- detail.html
+    |-- index.html
+    |-- js
+        |-- api.js
+        |-- dashboard.js
+        |-- detail.js
+        |-- logs.js
+    |-- logs.html
+|-- __pycache__
+    |-- main.cpython-310.pyc

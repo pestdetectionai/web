@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Access · Pest Detection AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+    <link rel="stylesheet" href="/web/css/app.css">
+</head>
+
+<body>
+    <header class="topbar">
+        <div style="display:flex;align-items:center;gap:28px"><a class="brand" href="/ui">Pest Detection AI</a>
+            <nav class="nav"><a href="/ui">Dashboard</a><a href="/ui/logs">Logs</a><a class="active"
+                    href="/ui/access">Access</a></nav>
+        </div>
+        <div class="avatar">AI</div>
+    </header>
+    <main class="shell">
+        <div class="label">Admin Portal</div>
+        <h1 style="font-size:36px;margin:4px 0 28px;color:var(--primary)">Access Management</h1>
+        <section class="card">
+            <div style="padding:0 24px;border-bottom:1px solid #dfe4e1;display:flex;gap:24px"><button class="btn"
+                    style="border:0;border-bottom:2px solid var(--primary);border-radius:0">Access
+                    Request</button><button class="btn" style="border:0;border-radius:0;color:#60716a">Users</button>
+            </div>
+            <div style="padding:24px">
+                <div class="toolbar" style="justify-content:space-between;margin-bottom:20px"><input class="input"
+                        style="min-width:360px" placeholder="Search by name or email..."><button class="btn"><span
+                            class="material-symbols-outlined">download</span> Export CSV</button></div>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Requested Role</th>
+                            <th style="text-align:right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="requests"></tbody>
+                </table>
+            </div>
+        </section>
+        <div class="grid stats" style="margin-top:24px">
+            <div class="card pad">
+                <div class="label">Total Users</div>
+                <div class="stat">1,248</div>
+                <div class="good">↗ +12% this month</div>
+            </div>
+            <div class="card pad">
+                <div class="label">Pending Invites</div>
+                <div class="stat">42</div>
+                <div class="sub">Expires in 24 hours</div>
+            </div>
+            <div class="card pad">
+                <div class="label">System Health</div>
+                <div class="stat">99.9%</div>
+                <div class="sub">Authentication uptime</div>
+            </div>
+        </div>
+    </main>
+    <script>const data = [['JD', 'Julian D\'Arby', 'j.darby@sentinel-ops.io', 'Site Supervisor'], ['MA', 'Marcus Aurel', 'm.aurel@agri-tech.com', 'Data Analyst'], ['SL', 'Sarah Lane', 'sarah.lane@orchardview.net', 'Viewer']]; document.getElementById('requests').innerHTML = data.map(r => `<tr><td><div style="display:flex;align-items:center;gap:12px"><div class="avatar">${r[0]}</div><b>${r[1]}</b></div></td><td>${r[2]}</td><td>${r[3]}</td><td style="text-align:right"><button class="btn primary">Approve</button> <button class="btn danger">Reject</button></td></tr>`).join('')</script>
+</body>
+
+</html>

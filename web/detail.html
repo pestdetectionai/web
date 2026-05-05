@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Detection Detail · Pest Detection AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+    <link rel="stylesheet" href="/web/css/app.css">
+</head>
+
+<body>
+    <header class="topbar">
+        <div style="display:flex;align-items:center;gap:14px"><a class="btn" href="/ui/logs"><span
+                    class="material-symbols-outlined">arrow_back</span></a><a class="brand" href="/ui">Pest Detection
+                AI</a></div>
+        <div class="avatar">AI</div>
+    </header>
+    <main class="shell">
+        <div class="section-head">
+            <div>
+                <div class="label">Logs / <span id="eventId">...</span></div>
+                <h1 style="font-size:36px;margin:4px 0;color:var(--primary)">Detection Detail</h1>
+            </div>
+            <div class="toolbar"><a id="downloadBtn" class="btn" target="_blank"><span
+                        class="material-symbols-outlined">download</span> Export Frame</a><button
+                    class="btn primary"><span class="material-symbols-outlined">verified</span> Validate
+                    Results</button></div>
+        </div>
+        <div class="grid detail-grid">
+            <section>
+                <div class="card pad"><img id="detailImage" class="hero-img" onerror="imgFallback(event)"></div>
+                <div class="grid metric-grid" style="margin-top:20px">
+                    <div class="card metric">
+                        <div class="iconbox"><span class="material-symbols-outlined">radar</span></div>
+                        <div>
+                            <div class="label">Detection Count</div>
+                            <div id="detCount" class="stat" style="font-size:32px">0</div>
+                        </div>
+                    </div>
+                    <div class="card metric">
+                        <div class="iconbox"><span class="material-symbols-outlined">query_stats</span></div>
+                        <div>
+                            <div class="label">Avg Confidence</div>
+                            <div id="avgConf" class="stat" style="font-size:32px">0%</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <aside class="grid">
+                <section class="card">
+                    <div style="padding:16px 18px;border-bottom:1px solid #e5ebe7;background:#f3f6f5">
+                        <div class="label">Event Metadata</div>
+                    </div>
+                    <div style="padding:20px">
+                        <div class="label">Timestamp</div>
+                        <p id="timestamp" style="font-weight:750"></p>
+                        <hr style="border:0;border-top:1px solid #edf1ef;margin:18px 0">
+                        <div class="label">Storage</div>
+                        <p id="storage" class="sub"></p>
+                        <p><a id="originalLink" target="_blank">Original image</a> · <a id="debugLink"
+                                target="_blank">Debug mask</a></p>
+                    </div>
+                </section>
+                <section class="card">
+                    <div
+                        style="padding:16px 18px;border-bottom:1px solid #e5ebe7;background:#f3f6f5;display:flex;justify-content:space-between">
+                        <div class="label">Pest Breakdown</div><b id="breakTotal">0 total</b>
+                    </div>
+                    <div id="breakdown"></div>
+                </section>
+                <section class="card pad"><label class="label">Analyst Notes</label><textarea class="input"
+                        style="width:100%;min-height:110px;margin-top:10px"
+                        placeholder="Add manual observation note..."></textarea><button class="btn"
+                        style="width:100%;justify-content:center;margin-top:12px">Save Analysis</button></section>
+            </aside>
+        </div>
+    </main>
+    <script src="/web/js/api.js"></script>
+    <script src="/web/js/detail.js"></script>
+</body>
+
+</html>

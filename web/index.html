@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pest Detection AI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap"
+    rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+  <link rel="stylesheet" href="/web/css/app.css">
+</head>
+
+<body>
+  <header class="topbar">
+    <div style="display:flex;align-items:center;gap:28px"><a class="brand" href="/ui">Pest Detection AI</a>
+      <nav class="nav"><a class="active" href="/ui">Dashboard</a><a href="/ui/logs">Logs</a><a
+          href="/ui/access">Access</a></nav>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px"><span
+        class="material-symbols-outlined muted">notifications</span>
+      <div class="avatar">AI</div>
+    </div>
+  </header>
+  <main class="shell grid">
+    <section class="grid stats">
+      <div class="card pad">
+        <div class="label">Detections</div>
+        <div><span id="todayPests" class="stat">0</span> <span class="sub">today</span></div>
+        <div id="topToday" class="good">Loading...</div>
+      </div>
+      <div class="card pad">
+        <div class="label">Biodiversity</div>
+        <div><span id="biodiversity" class="stat">0</span></div>
+        <div class="sub">Type of pest today</div>
+      </div>
+      <div class="card pad">
+        <div class="label">Trend Analysis</div>
+        <div><span id="dailyAvg" class="stat">0</span> <span class="sub">daily average</span></div>
+        <div id="monthInfo" class="sub">Last 7 days analysis</div>
+      </div>
+    </section>
+    <section class="grid main-grid">
+      <div class="live-frame card">
+        <div class="badge live-badge"><span class="dot pulse"></span> Live feed: latest analysis</div><img
+          id="liveImage" onerror="imgFallback(event)" alt="Latest AI pest detection">
+        <div style="position:absolute;right:16px;bottom:16px;display:flex;gap:8px"><a id="openLatest" href="#"
+            class="btn" style="background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.18)"><span
+              class="material-symbols-outlined">open_in_new</span></a></div>
+      </div>
+      <aside class="card side-list">
+        <div class="section-head">
+          <div class="label">Live Detections</div>
+          <div class="sub" id="updateAge">--</div>
+        </div>
+        <div id="liveList"></div>
+        <div style="border-top:1px solid #edf1ef;margin-top:22px;padding-top:18px">
+          <div class="sub" style="display:flex;justify-content:space-between;font-weight:800"><span>Total
+              Load</span><span id="loadPct">0%</span></div>
+          <div style="height:7px;background:#e0e8e3;border-radius:99px;margin-top:8px;overflow:hidden">
+            <div id="loadBar" style="height:100%;width:0;background:#059669"></div>
+          </div>
+        </div>
+      </aside>
+    </section>
+    <section class="card pad">
+      <div class="section-head">
+        <div>
+          <div class="label">24-hour trend</div>
+          <div class="sub">Detection frequency from Firebase logs</div>
+        </div>
+        <div class="toolbar"><button class="btn primary">24H</button><a class="btn" href="/ui/logs">View Logs</a></div>
+      </div>
+      <div id="hourlyChart" class="chart"></div>
+      <div
+        style="display:flex;justify-content:space-between;padding:0 18px 10px;color:#7c8b84;font-size:12px;font-weight:700">
+        <span>00:00</span><span>04:00</span><span>08:00</span><span>12:00</span><span>16:00</span><span>20:00</span><span>23:59</span>
+      </div>
+    </section>
+    <section class="card">
+      <div
+        style="padding:20px 24px;border-bottom:1px solid #edf1ef;display:flex;justify-content:space-between;gap:14px;align-items:center">
+        <h2 style="margin:0;color:var(--primary);font-size:22px">Detection Logs</h2><input id="searchBox" class="input"
+          placeholder="Search logs, species, timestamps...">
+      </div>
+      <div id="recentLogs"></div>
+      <div class="pager"><span id="logCount" class="sub">Loading...</span><a class="btn" href="/ui/logs">Load More
+          Entries</a></div>
+    </section>
+    <section class="card pad">
+      <div class="section-head">
+        <div>
+          <div class="label">Manual Upload Test</div>
+          <div class="sub">Upload an image to /api/analyze, then save image to Cloudinary and log to Firebase.</div>
+        </div>
+      </div>
+      <div class="dropzone"><input id="uploadInput" type="file" accept="image/*" class="input"><button id="uploadBtn"
+          class="btn primary"><span class="material-symbols-outlined">upload</span> Analyze Image</button>
+        <div id="uploadStatus" class="sub"></div>
+      </div>
+    </section>
+  </main>
+  <script src="/web/js/api.js"></script>
+  <script src="/web/js/dashboard.js"></script>
+</body>
+
+</html>

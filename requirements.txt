@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+python-multipart
+ultralytics
+opencv-python
+numpy
+pillow
+huggingface_hub
+firebase-admin
+python-dotenv
+cloudinary
