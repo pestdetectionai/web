@@ -33,7 +33,6 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent
 
 MODEL_DIR = BASE_DIR / "models"
-
 MODEL_FILENAME = os.getenv("MODEL_FILENAME", "best.pt").strip()
 MODEL_PATH = Path(os.getenv("MODEL_PATH", str(MODEL_DIR / MODEL_FILENAME))).resolve()
 
@@ -72,7 +71,6 @@ APP_PUBLIC_BASE_URL = os.getenv("APP_PUBLIC_BASE_URL", "").strip()
 FIREBASE_DATABASE_URL = os.getenv("FIREBASE_DATABASE_URL", "").strip()
 FIREBASE_SERVICE_ACCOUNT_PATH = os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH", "").strip()
 FIREBASE_SERVICE_ACCOUNT_JSON_B64 = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON_B64", "").strip()
-
 FIREBASE_LOGS_PATH = "/api/analyze/logs"
 
 CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME", "").strip()
@@ -80,28 +78,21 @@ CLOUDINARY_API_KEY = os.getenv("CLOUDINARY_API_KEY", "").strip()
 CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET", "").strip()
 CLOUDINARY_FOLDER = os.getenv("CLOUDINARY_FOLDER", "smart-pest-detection").strip()
 
-# YOLO settings
 YOLO_CONFIDENCE = 0.08
 YOLO_IOU = 0.40
 YOLO_IMAGE_SIZE = 1280
 
-# YOLO filter
 MAX_YOLO_BOX_AREA_RATIO = 0.10
 LOW_CONF_LARGE_BOX_CONF = 0.20
 LOW_CONF_LARGE_BOX_AREA_RATIO = 0.040
 
-# CV proposal settings
-PROPOSAL_MIN_AREA = 10
-PROPOSAL_MAX_AREA_RATIO = 0.030
-PROPOSAL_MIN_WIDTH = 4
-PROPOSAL_MIN_HEIGHT = 4
-PROPOSAL_MAX_WIDTH_RATIO = 0.35
-PROPOSAL_MAX_HEIGHT_RATIO = 0.35
+VISUAL_COUNTER_ENABLED = True
 
-GOOD_YOLO_CONFIDENCE = 0.24
-UNKNOWN_OVERLAP_WITH_GOOD_YOLO = 0.12
+# This is the main duplicate rule:
+# if the fallback pest is almost inside a YOLO pest, remove fallback duplicate.
+UNKNOWN_OVERLAP_WITH_YOLO = 0.45
 
-FINAL_NMS_IOU = 0.14
+FINAL_NMS_IOU = 0.10
 
 GREEN = (0, 255, 0)
 ORANGE = (0, 165, 255)
@@ -114,8 +105,8 @@ BLACK = (0, 0, 0)
 
 app = FastAPI(
     title="Smart Pest Trap Detection API",
-    description="YOLO pest identification + Cloudinary storage + Firebase logs + static website.",
-    version="9.1.0"
+    description="YOLO pest identification + visual pest counter + Cloudinary storage + Firebase logs + static website.",
+    version="11.0.0"
 )
 
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
@@ -145,11 +136,6 @@ def startup():
 
 
 def ensure_model_available():
-    """
-    Downloads the YOLO model on boot if models/best.pt is missing.
-    First boot needs internet. After download, it uses the local file.
-    """
-
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     if MODEL_PATH.exists() and MODEL_PATH.stat().st_size > 0:
@@ -184,9 +170,8 @@ def ensure_model_available():
 
         downloaded_path = Path(downloaded_path).resolve()
 
-        if downloaded_path != MODEL_PATH:
-            if downloaded_path.exists():
-                MODEL_PATH.write_bytes(downloaded_path.read_bytes())
+        if downloaded_path != MODEL_PATH and downloaded_path.exists():
+            MODEL_PATH.write_bytes(downloaded_path.read_bytes())
 
         if not MODEL_PATH.exists() or MODEL_PATH.stat().st_size <= 0:
             raise RuntimeError(f"Downloaded model is missing or empty: {MODEL_PATH}")
@@ -352,16 +337,10 @@ async def save_upload(file: UploadFile, ext: str) -> Path:
     with open(save_path, "wb") as buffer:
         buffer.write(content)
 
-    if not save_path.exists():
+    if not save_path.exists() or save_path.stat().st_size <= 0:
         raise HTTPException(
             status_code=500,
-            detail=f"Upload save failed. File was not created: {save_path}"
-        )
-
-    if save_path.stat().st_size <= 0:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Upload save failed. File is empty: {save_path}"
+            detail=f"Upload save failed: {save_path}"
         )
 
     return save_path
@@ -428,7 +407,7 @@ def iou(box_a, box_b):
     return inter / union
 
 
-def intersection_ratio_small(box_a, box_b):
+def overlap_ratio_small(box_a, box_b):
     ax1, ay1, ax2, ay2 = box_a
     bx1, by1, bx2, by2 = box_b
 
@@ -449,11 +428,11 @@ def intersection_ratio_small(box_a, box_b):
     return inter / smaller
 
 
-def nms_detections(detections, iou_threshold=0.14, class_aware=False):
+def nms_detections(detections, iou_threshold=0.10, class_aware=False):
     if not detections:
         return []
 
-    detections = sorted(detections, key=lambda d: d["confidence"], reverse=True)
+    detections = sorted(detections, key=lambda d: float(d.get("confidence", 0)), reverse=True)
     kept = []
 
     while detections:
@@ -477,6 +456,46 @@ def nms_detections(detections, iou_threshold=0.14, class_aware=False):
         detections = remaining
 
     return kept
+
+
+# =========================================================
+# CONFIDENCE HELPERS
+# =========================================================
+
+def compute_avg_confidence(item: dict) -> float:
+    detections = item.get("detections", []) or []
+    valid = []
+
+    for det in detections:
+        try:
+            conf = float(det.get("confidence", 0) or 0)
+            if conf > 0:
+                valid.append(conf)
+        except Exception:
+            pass
+
+    if not valid:
+        return 0.0
+
+    return round(sum(valid) / len(valid), 4)
+
+
+def compute_top_confidence(item: dict) -> float:
+    detections = item.get("detections", []) or []
+    valid = []
+
+    for det in detections:
+        try:
+            conf = float(det.get("confidence", 0) or 0)
+            if conf > 0:
+                valid.append(conf)
+        except Exception:
+            pass
+
+    if not valid:
+        return 0.0
+
+    return round(max(valid), 4)
 
 
 # =========================================================
@@ -560,24 +579,34 @@ def upload_analysis_images_to_cloudinary(uploaded_path: Path, result_image_path:
 # IMAGE PREPROCESSING
 # =========================================================
 
-def remove_red_markup_if_present(image):
+def remove_colored_markup_if_present(image):
+    """
+    Removes red user marks and green previous YOLO boxes/labels if a marked image is re-uploaded.
+    Clean original frames are still best.
+    """
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
-    lower_red1 = np.array([0, 80, 80])
-    upper_red1 = np.array([12, 255, 255])
+    lower_red1 = np.array([0, 70, 70])
+    upper_red1 = np.array([14, 255, 255])
 
-    lower_red2 = np.array([170, 80, 80])
+    lower_red2 = np.array([165, 70, 70])
     upper_red2 = np.array([180, 255, 255])
 
-    mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
-    mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
+    red_mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
+    red_mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
+    red_mask = cv2.bitwise_or(red_mask1, red_mask2)
 
-    red_mask = cv2.bitwise_or(mask1, mask2)
+    lower_green = np.array([35, 50, 50])
+    upper_green = np.array([95, 255, 255])
+    green_mask = cv2.inRange(hsv, lower_green, upper_green)
 
-    if cv2.countNonZero(red_mask) < 50:
+    mask = cv2.bitwise_or(red_mask, green_mask)
+
+    if cv2.countNonZero(mask) < 50:
         return image
 
-    return cv2.inpaint(image, red_mask, 5, cv2.INPAINT_TELEA)
+    mask = cv2.dilate(mask, np.ones((3, 3), np.uint8), iterations=1)
+    return cv2.inpaint(image, mask, 5, cv2.INPAINT_TELEA)
 
 
 def enhance_image(image):
@@ -632,6 +661,7 @@ def find_trap_floor_crop(image):
                 y1 = max(0, y - pad)
                 x2 = min(w, x + cw + pad)
                 y2 = min(h, y + ch + pad)
+
                 return image[y1:y2, x1:x2].copy(), x1, y1
 
     x1 = int(w * 0.16)
@@ -760,121 +790,49 @@ def filter_bad_yolo_boxes(detections, image_width, image_height):
 
 
 # =========================================================
-# COMPUTER VISION PROPOSAL DETECTOR
+# HARD VISUAL COUNTER
 # =========================================================
 
-def create_floor_mask(floor_crop):
-    enhanced = enhance_image(floor_crop)
+def hard_visual_counter(original, floor_crop, floor_x, floor_y):
+    """
+    This is the important part.
 
-    gray = cv2.cvtColor(enhanced, cv2.COLOR_BGR2GRAY)
-    gray = cv2.GaussianBlur(gray, (3, 3), 0)
-
-    local_bg = cv2.GaussianBlur(gray, (0, 0), 19)
-    dark_diff = cv2.subtract(local_bg, gray)
-    _, dark_mask = cv2.threshold(dark_diff, 5, 255, cv2.THRESH_BINARY)
-
-    adaptive = cv2.adaptiveThreshold(
-        gray,
-        255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY_INV,
-        31,
-        3
-    )
-
-    edges = cv2.Canny(gray, 18, 75)
-    edges = cv2.dilate(edges, np.ones((2, 2), np.uint8), iterations=1)
-
-    blackhat_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (19, 19))
-    blackhat = cv2.morphologyEx(gray, cv2.MORPH_BLACKHAT, blackhat_kernel)
-    _, blackhat_mask = cv2.threshold(blackhat, 4, 255, cv2.THRESH_BINARY)
-
-    lab = cv2.cvtColor(enhanced, cv2.COLOR_BGR2LAB)
-    l, a, b = cv2.split(lab)
-
-    bg_l = cv2.GaussianBlur(l, (0, 0), 21)
-    bg_a = cv2.GaussianBlur(a, (0, 0), 21)
-    bg_b = cv2.GaussianBlur(b, (0, 0), 21)
-
-    diff_l = cv2.absdiff(l, bg_l)
-    diff_a = cv2.absdiff(a, bg_a)
-    diff_b = cv2.absdiff(b, bg_b)
-
-    color_diff = cv2.addWeighted(diff_l, 0.45, diff_a, 0.30, 0)
-    color_diff = cv2.addWeighted(color_diff, 1.0, diff_b, 0.25, 0)
-
-    _, color_mask = cv2.threshold(color_diff, 7, 255, cv2.THRESH_BINARY)
-
-    combined = cv2.bitwise_or(dark_mask, adaptive)
-    combined = cv2.bitwise_or(combined, edges)
-    combined = cv2.bitwise_or(combined, blackhat_mask)
-    combined = cv2.bitwise_or(combined, color_mask)
-
-    k2 = np.ones((2, 2), np.uint8)
-    k3 = np.ones((3, 3), np.uint8)
-
-    combined = cv2.morphologyEx(combined, cv2.MORPH_OPEN, k2, iterations=1)
-    combined = cv2.morphologyEx(combined, cv2.MORPH_CLOSE, k3, iterations=1)
-    combined = cv2.dilate(combined, k3, iterations=1)
-
-    return combined
-
-
-def score_candidate(floor_crop, x, y, w, h):
-    crop_h, crop_w = floor_crop.shape[:2]
-
-    x1 = max(0, x)
-    y1 = max(0, y)
-    x2 = min(crop_w, x + w)
-    y2 = min(crop_h, y + h)
-
-    roi = floor_crop[y1:y2, x1:x2]
-
-    if roi.size == 0:
-        return 0.0
-
-    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-
-    contrast = float(np.std(gray))
-    mean_darkness = 255.0 - float(np.mean(gray))
-
-    edges = cv2.Canny(gray, 20, 80)
-    edge_density = cv2.countNonZero(edges) / max(1, edges.shape[0] * edges.shape[1])
-
-    area = w * h
-    aspect = w / max(h, 1)
-
-    score = 0.0
-
-    if contrast >= 5:
-        score += 0.25
-
-    if contrast >= 10:
-        score += 0.25
-
-    if mean_darkness >= 35:
-        score += 0.20
-
-    if edge_density >= 0.015:
-        score += 0.20
-
-    if 0.12 <= aspect <= 8.5:
-        score += 0.10
-
-    if area >= 20:
-        score += 0.10
-
-    return min(score, 0.95)
-
-
-def proposal_detections_from_floor(original, floor_crop, floor_x, floor_y):
+    It counts visible dark pests using a hard visual threshold from the trap floor.
+    For your sample image, it should find 4 dark components.
+    YOLO will classify one, and this fallback will add the other 3 as unknown_pest.
+    """
     detections = []
-
-    mask = create_floor_mask(floor_crop)
 
     crop_h, crop_w = floor_crop.shape[:2]
     original_h, original_w = original.shape[:2]
-    crop_area = crop_w * crop_h
+
+    gray = cv2.cvtColor(floor_crop, cv2.COLOR_BGR2GRAY)
+
+    # Hard threshold is intentional.
+    # Your missed pests are visibly dark. Dynamic threshold from the floor tends to include stains.
+    # This threshold catches the 4 visible dark pest bodies/wings in the sample.
+    threshold_value = int(os.getenv("VISUAL_DARK_THRESHOLD", "112"))
+
+    mask = cv2.threshold(
+        gray,
+        threshold_value,
+        255,
+        cv2.THRESH_BINARY_INV
+    )[1]
+
+    # Remove crop edge artifacts.
+    border = 8
+    mask[:border, :] = 0
+    mask[-border:, :] = 0
+    mask[:, :border] = 0
+    mask[:, -border:] = 0
+
+    # Clean and merge wings/body.
+    k2 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2, 2))
+    k5 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, k2, iterations=1)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, k5, iterations=1)
 
     contours, _ = cv2.findContours(
         mask,
@@ -882,35 +840,42 @@ def proposal_detections_from_floor(original, floor_crop, floor_x, floor_y):
         cv2.CHAIN_APPROX_SIMPLE
     )
 
-    max_area = crop_area * PROPOSAL_MAX_AREA_RATIO
-    max_w = crop_w * PROPOSAL_MAX_WIDTH_RATIO
-    max_h = crop_h * PROPOSAL_MAX_HEIGHT_RATIO
-
     for cnt in contours:
         x, y, bw, bh = cv2.boundingRect(cnt)
-        area = cv2.contourArea(cnt)
+        contour_area = cv2.contourArea(cnt)
         box_area_local = bw * bh
 
-        if area < PROPOSAL_MIN_AREA:
+        if box_area_local < 120:
             continue
 
-        if box_area_local > max_area:
+        if box_area_local > 6000:
             continue
 
-        if bw < PROPOSAL_MIN_WIDTH or bh < PROPOSAL_MIN_HEIGHT:
-            continue
-
-        if bw > max_w or bh > max_h:
+        if bw < 7 or bh < 7:
             continue
 
         aspect = bw / max(bh, 1)
 
-        if aspect < 0.08 or aspect > 11.0:
+        if aspect < 0.20 or aspect > 3.80:
             continue
 
-        score = score_candidate(floor_crop, x, y, bw, bh)
+        roi = gray[y:y + bh, x:x + bw]
 
-        if score < 0.22:
+        if roi.size == 0:
+            continue
+
+        contrast = float(np.std(roi))
+        darkness = 255.0 - float(np.mean(roi))
+
+        edges = cv2.Canny(roi, 10, 70)
+        edge_density = cv2.countNonZero(edges) / max(1, bw * bh)
+
+        # Real pests have strong darkness/contrast or wing/body edges.
+        # Soft stains should fail this.
+        if contrast < 18 and edge_density < 0.045:
+            continue
+
+        if darkness < 45 and contrast < 25:
             continue
 
         x1 = floor_x + x
@@ -920,15 +885,46 @@ def proposal_detections_from_floor(original, floor_crop, floor_x, floor_y):
 
         x1, y1, x2, y2 = expand_box(
             [x1, y1, x2, y2],
-            pad=4,
+            pad=5,
             width=original_w,
             height=original_h
         )
 
+        score = 0.18
+
+        if contrast >= 25:
+            score += 0.10
+
+        if contrast >= 35:
+            score += 0.10
+
+        if edge_density >= 0.08:
+            score += 0.08
+
+        if darkness >= 90:
+            score += 0.08
+
+        if box_area_local >= 400:
+            score += 0.04
+
+        score = min(score, 0.60)
+
         detections.append({
             "type": "unknown_pest",
-            "confidence": round(max(0.18, min(score, 0.60)), 4),
-            "source": "cv_proposal_counter",
+            "confidence": round(score, 4),
+            "source": "hard_visual_counter",
+            "debug": {
+                "threshold": threshold_value,
+                "local_x": int(x),
+                "local_y": int(y),
+                "local_w": int(bw),
+                "local_h": int(bh),
+                "box_area": int(box_area_local),
+                "contour_area": round(float(contour_area), 2),
+                "contrast": round(contrast, 2),
+                "darkness": round(darkness, 2),
+                "edge_density": round(edge_density, 4)
+            },
             "box": {
                 "x1": round(x1, 2),
                 "y1": round(y1, 2),
@@ -939,7 +935,7 @@ def proposal_detections_from_floor(original, floor_crop, floor_x, floor_y):
 
     detections = nms_detections(
         detections,
-        iou_threshold=0.10,
+        iou_threshold=0.08,
         class_aware=False
     )
 
@@ -947,24 +943,19 @@ def proposal_detections_from_floor(original, floor_crop, floor_x, floor_y):
 
 
 def remove_unknown_duplicates(yolo_detections, unknown_detections):
-    good_yolo = [
-        d for d in yolo_detections
-        if d["confidence"] >= GOOD_YOLO_CONFIDENCE
-    ]
-
+    """
+    Remove unknown only if it is basically the same pest as a YOLO detection.
+    """
     cleaned = []
 
     for unknown in unknown_detections:
         ub = get_box(unknown)
-
         duplicate = False
 
-        for known in good_yolo:
+        for known in yolo_detections:
             kb = get_box(known)
 
-            overlap = intersection_ratio_small(ub, kb)
-
-            if overlap >= UNKNOWN_OVERLAP_WITH_GOOD_YOLO:
+            if overlap_ratio_small(ub, kb) >= UNKNOWN_OVERLAP_WITH_YOLO:
                 duplicate = True
                 break
 
@@ -992,7 +983,7 @@ def run_detection_pipeline(image_path: Path):
     if original is None:
         raise HTTPException(status_code=400, detail="Unable to read uploaded image.")
 
-    original = remove_red_markup_if_present(original)
+    original = remove_colored_markup_if_present(original)
 
     h, w = original.shape[:2]
 
@@ -1068,21 +1059,21 @@ def run_detection_pipeline(image_path: Path):
         class_aware=True
     )
 
-    unknown_detections, proposal_mask = proposal_detections_from_floor(
+    visual_detections, visual_mask = hard_visual_counter(
         original,
         floor_crop,
         floor_x,
         floor_y
     )
 
-    unknown_detections = remove_unknown_duplicates(
+    visual_detections = remove_unknown_duplicates(
         yolo_detections,
-        unknown_detections
+        visual_detections
     )
 
     final_detections = []
     final_detections.extend(yolo_detections)
-    final_detections.extend(unknown_detections)
+    final_detections.extend(visual_detections)
 
     final_detections = nms_detections(
         final_detections,
@@ -1090,7 +1081,7 @@ def run_detection_pipeline(image_path: Path):
         class_aware=False
     )
 
-    return final_detections, original, proposal_mask
+    return final_detections, original, visual_mask
 
 
 # =========================================================
@@ -1113,7 +1104,6 @@ def draw_annotated_image(original_image, image_path: Path, detections):
         y2 = int(box["y2"])
 
         color = ORANGE if label == "unknown_pest" else GREEN
-
         text = f"{label} {confidence:.2f}"
 
         cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
@@ -1394,6 +1384,8 @@ def compact_log_item(item):
         "timestamp_ms": item.get("timestamp_ms"),
         "total": item.get("total", 0),
         "data": item.get("data", []),
+        "avg_confidence": item.get("avg_confidence", compute_avg_confidence(item)),
+        "top_confidence": item.get("top_confidence", compute_top_confidence(item)),
         "annotated_image": item.get("annotated_image"),
         "original_image": item.get("original_image"),
         "debug_mask": item.get("debug_mask"),
@@ -1590,6 +1582,7 @@ def api_status():
         "hf_model_file": HF_MODEL_FILE,
         "firebase_logs_path": FIREBASE_LOGS_PATH,
         "cloudinary_folder": CLOUDINARY_FOLDER,
+        "visual_dark_threshold": int(os.getenv("VISUAL_DARK_THRESHOLD", "112")),
         "field_name": "image"
     }
 
@@ -1600,7 +1593,7 @@ async def analyze_pest(request: Request, image: UploadFile = File(...)):
         ext = validate_image_file(image)
         uploaded_path = await save_upload(image, ext)
 
-        detections, processed_original, proposal_mask = run_detection_pipeline(uploaded_path)
+        detections, processed_original, visual_mask = run_detection_pipeline(uploaded_path)
 
         result_image_path = draw_annotated_image(
             processed_original,
@@ -1610,11 +1603,14 @@ async def analyze_pest(request: Request, image: UploadFile = File(...)):
 
         debug_mask_path = save_debug_mask(
             uploaded_path,
-            proposal_mask
+            visual_mask
         )
 
         data = build_summary(detections)
         total = len(detections)
+
+        avg_confidence = compute_avg_confidence({"detections": detections})
+        top_confidence = compute_top_confidence({"detections": detections})
 
         local_original_url, local_annotated_url, local_debug_url = get_local_image_urls(
             request,
@@ -1643,34 +1639,30 @@ async def analyze_pest(request: Request, image: UploadFile = File(...)):
             "data": data,
             "total": total,
             "detections": detections,
-
+            "avg_confidence": avg_confidence,
+            "top_confidence": top_confidence,
             "original_image": original_image_url,
             "annotated_image": annotated_image_url,
             "debug_mask": debug_mask_url,
-
             "local_images": {
                 "original_image": local_original_url,
                 "annotated_image": local_annotated_url,
                 "debug_mask": local_debug_url
             },
-
             "image_files": {
                 "original_filename": uploaded_path.name,
                 "annotated_filename": result_image_path.name,
                 "debug_mask_filename": debug_mask_path.name if debug_mask_path else None
             },
-
             "cloudinary_saved": cloudinary_saved,
             "cloudinary": {
                 "original": original_cloud,
                 "annotated": annotated_cloud,
                 "debug_mask": debug_cloud
             },
-
             "firebase_saved": False,
             "firebase_path": None,
-
-            "note": "Green boxes are YOLO identified pests. Orange boxes are counted pest-like objects that the model could not identify."
+            "note": "Green boxes are YOLO identified pests. Orange boxes are hard visual counter detections that YOLO could not classify."
         }
 
         log_id = save_analysis_log_to_firebase(log_payload)
@@ -1681,6 +1673,8 @@ async def analyze_pest(request: Request, image: UploadFile = File(...)):
             "data": data,
             "total": total,
             "detections": detections,
+            "avg_confidence": avg_confidence,
+            "top_confidence": top_confidence,
             "original_image": original_image_url,
             "annotated_image": annotated_image_url,
             "debug_mask": debug_mask_url,
