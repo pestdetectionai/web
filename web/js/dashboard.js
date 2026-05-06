@@ -176,4 +176,4 @@ loadDashboard().catch(e => {
   );
 });
 
-setInterval(loadLatest, 5000);
+setInterval(loadLatest, 5000);  
